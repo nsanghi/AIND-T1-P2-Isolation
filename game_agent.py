@@ -43,14 +43,20 @@ def custom_score(game, player):
 
     own_moves = len(game.get_legal_moves(player))
     opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    spaces = float(len(game.get_blank_spaces()))
-    total_cells = (game.width * game.height)
-    open_pct = spaces / total_cells
 
-    if open_pct > 0.5:
-        return float((0.5*own_moves - opp_moves))
-    else:
-        return float((own_moves - 0.5 * opp_moves))
+    score1 = float(own_moves - 2*opp_moves)
+
+    w, h = game.width // 2, game.height // 2
+    y, x = game.get_player_location(player)
+
+    score2 = float((w-y)**2 + (h-x)**2)
+
+    weight = 0.5
+
+    final_score = weight*score1 - (1-weight)*score2
+
+    return final_score
+
 
 
 def custom_score_2(game, player):
@@ -82,8 +88,8 @@ def custom_score_2(game, player):
     if game.is_winner(player):
         return float("inf")
 
-    own_moves = len(game.get_legal_moves(player))
-    return float(own_moves)
+    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    return float(-opp_moves)
 
 
 
@@ -116,8 +122,24 @@ def custom_score_3(game, player):
     if game.is_winner(player):
         return float("inf")
 
-    opp_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    return float( - opp_moves)
+    game_state_factor = 1
+    # penalise severly if active player lands up in corner when the board is <50% empty
+    if len(game.get_blank_spaces()) < game.width * game.height / 2.:
+        game_state_factor = 10
+
+    corners = [(0, 0),
+               (0, (game.width - 1)),
+               ((game.height - 1), 0),
+               ((game.height - 1), (game.width - 1))]
+
+    own_moves = game.get_legal_moves(player)
+    own_corner = [move for move in own_moves if move in corners]
+    opp_moves = game.get_legal_moves(game.get_opponent(player))
+    opp_corner = [move for move in opp_moves if move in corners]
+
+    # penalise if active player has moves taking to corner
+    return float((len(own_moves) - (game_state_factor * len(own_corner)))
+                 - (len(opp_moves) - (game_state_factor * len(opp_corner))))
 
 
 class IsolationPlayer:
@@ -243,12 +265,11 @@ class MinimaxPlayer(IsolationPlayer):
             raise SearchTimeout()
 
         # TODO: finish this function!
-        best_move = (-1,-1)
         legal_moves = game.get_legal_moves()
+        if not legal_moves:
+            return (-1, -1)
 
-        if not legal_moves or depth == 0:
-            return best_move
-
+        best_move = legal_moves[0]
         v = float('-inf')
         for move in legal_moves:
             new_game = game.forecast_move(move)
@@ -333,18 +354,28 @@ class AlphaBetaPlayer(IsolationPlayer):
         self.time_left = time_left
 
         # TODO: finish this function!
-        best_move = (-1, -1)
+        moves = game.get_legal_moves()
+        if moves:
+            best_move = random.choice(moves)
+        else:
+            best_move = (-1, -1)
+            return best_move
+
         depth = 1
         try:
             # The try/except block will automatically catch the exception
             # raised when the timer is about to expire.
             while True:
                 new_move = self.alphabeta(game, depth)
-                if new_move != (-1,-1):
-                    best_move = new_move
+
+                if new_move == (-1, -1):
+                    return best_move
+
+                best_move = new_move
                 depth += 1
 
         except SearchTimeout:
+            # print("depth={}".format(depth)) # to see the impact of heuristic complexity on depth
             pass  # Handle any actions required after timeout as needed
 
         # Return the best move from the last completed search iteration
@@ -399,12 +430,12 @@ class AlphaBetaPlayer(IsolationPlayer):
             raise SearchTimeout()
 
         # TODO: finish this function!
-        best_move = (-1,-1)
-
         legal_moves = game.get_legal_moves()
 
-        if not legal_moves or depth == 0:
-            return best_move
+        if not legal_moves:
+            return (-1, -1)
+
+        best_move = random.choice(legal_moves)
 
         v = float('-inf')
         for move in legal_moves:
